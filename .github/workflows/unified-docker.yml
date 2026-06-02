@@ -69,7 +69,9 @@ jobs:
     if: ${{ needs.setup.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
     permissions:
+      attestations: write
       contents: read
+      id-token: write
       packages: write
     strategy:
       fail-fast: false
@@ -126,18 +128,44 @@ jobs:
           docker/unified/build-image.sh "--${BACKEND}"
 
       - name: Push to GitHub Container Registry
+        id: push
         if: ${{ !env.ACT && (github.event_name == 'schedule' || inputs.push_to_ghcr == true) }}
         env:
           BACKEND: ${{ matrix.backend }}
         run: |
+          IMAGE_NAME="ghcr.io/mostlygeek/llama-swap"
           BASE_TAG="ghcr.io/mostlygeek/llama-swap:unified-${BACKEND}"
           DATE_TAG=$(date -u +%Y-%m-%d)
 
           docker push "${BASE_TAG}"
           docker tag "${BASE_TAG}" "${BASE_TAG}-${DATE_TAG}"
           docker push "${BASE_TAG}-${DATE_TAG}"
+          BASE_DIGEST=$(docker buildx imagetools inspect "${BASE_TAG}" --format '{{ .Manifest.Digest }}')
 
           ROOTLESS_TAG="${BASE_TAG}-rootless"
           docker push "${ROOTLESS_TAG}"
           docker tag "${ROOTLESS_TAG}" "${ROOTLESS_TAG}-${DATE_TAG}"
           docker push "${ROOTLESS_TAG}-${DATE_TAG}"
+          ROOTLESS_DIGEST=$(docker buildx imagetools inspect "${ROOTLESS_TAG}" --format '{{ .Manifest.Digest }}')
+
+          {
+            echo "image_name=${IMAGE_NAME}"
+            echo "base_digest=${BASE_DIGEST}"
+            echo "rootless_digest=${ROOTLESS_DIGEST}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Attest unified image provenance
+        if: ${{ !env.ACT && (github.event_name == 'schedule' || inputs.push_to_ghcr == true) }}
+        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        with:
+          subject-name: ${{ steps.push.outputs.image_name }}
+          subject-digest: ${{ steps.push.outputs.base_digest }}
+          push-to-registry: true
+
+      - name: Attest rootless unified image provenance
+        if: ${{ !env.ACT && (github.event_name == 'schedule' || inputs.push_to_ghcr == true) }}
+        uses: actions/attest@281a49d4cbb0a72c9575a50d18f6deb515a11deb # v4
+        with:
+          subject-name: ${{ steps.push.outputs.image_name }}
+          subject-digest: ${{ steps.push.outputs.rootless_digest }}
+          push-to-registry: true
