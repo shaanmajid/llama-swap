@@ -22,16 +22,18 @@ on:
       - 'docker/build-container.sh'
       - 'docker/*.Containerfile'
 
-# grant permissions on GITHUB_TOKEN to publish packages
-# ref: https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions#publishing-a-package-using-an-action
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # grant permissions on GITHUB_TOKEN to publish packages
+    # ref: https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions#publishing-a-package-using-an-action
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     strategy:
       matrix:
         platform: [intel, cuda, cuda13, vulkan, cpu, musa, rocm]
@@ -39,6 +41,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Free up disk space
         if: matrix.platform == 'rocm'
@@ -88,6 +92,8 @@ jobs:
     # upstream account and would otherwise red-x every fork CI run.
     if: github.repository == 'mostlygeek/llama-swap'
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       - uses: dataaxiom/ghcr-cleanup-action@cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4 # v1.0.16
         with:

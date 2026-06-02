@@ -44,7 +44,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   setup:
@@ -69,6 +68,9 @@ jobs:
     needs: setup
     if: ${{ needs.setup.outputs.matrix != '[]' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +78,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
 
       - name: Free up disk space
         run: |
@@ -116,14 +120,17 @@ jobs:
           # On GitHub Actions, BUILDX_BUILDER is unset so docker uses the builder
           # created by setup-buildx-action above.
           BUILDX_BUILDER: ${{ env.ACT == 'true' && 'llama-swap-builder' || '' }}
+          BACKEND: ${{ matrix.backend }}
         run: |
           chmod +x docker/unified/build-image.sh
-          docker/unified/build-image.sh --${{ matrix.backend }}
+          docker/unified/build-image.sh "--${BACKEND}"
 
       - name: Push to GitHub Container Registry
         if: ${{ !env.ACT && (github.event_name == 'schedule' || inputs.push_to_ghcr == true) }}
+        env:
+          BACKEND: ${{ matrix.backend }}
         run: |
-          BASE_TAG="ghcr.io/mostlygeek/llama-swap:unified-${{ matrix.backend }}"
+          BASE_TAG="ghcr.io/mostlygeek/llama-swap:unified-${BACKEND}"
           DATE_TAG=$(date -u +%Y-%m-%d)
 
           docker push "${BASE_TAG}"
